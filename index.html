@@ -35,6 +35,8 @@
 
         --income:       oklch(55% 0.11 148);
         --expense:      oklch(58% 0.13 25);
+        --investment:   oklch(55% 0.11 255);
+        --account:      oklch(52% 0.08 210);
 
         --danger:       oklch(55% 0.15 22);
         --danger-bg:    oklch(96% 0.04 22);
@@ -578,6 +580,7 @@
         background: var(--expense);
       }
       .mov.income .mov-bar { background: var(--income); }
+      .mov.investment .mov-bar { background: var(--investment); }
 
       .mov-body { display: grid; gap: 2px; min-width: 0; }
       .mov-concept {
@@ -612,6 +615,7 @@
         white-space: nowrap;
       }
       .mov.income .mov-amount { color: var(--income); }
+      .mov.investment .mov-amount { color: var(--investment); }
 
       /* balance hero */
       .balance-card {
@@ -780,7 +784,7 @@
       /* stat grid */
       .stat-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
         gap: 10px;
       }
       .stat {
@@ -807,6 +811,8 @@
       .stat.expense .stat-value { color: var(--expense); }
       .stat.savings .stat-value { color: var(--lavender); }
       .stat.savings.neg .stat-value { color: var(--danger); }
+      .stat.investment .stat-value { color: var(--investment); }
+      .stat.account .stat-value { color: var(--account); }
 
       @media (max-width: 420px) {
         body { font-size: 17px; }
@@ -834,7 +840,7 @@
         .row { grid-template-columns: 1fr; }
         .pin-row { flex-wrap: wrap; }
         .tab { font-size: 14px; padding: 11px 8px; }
-        .stat-grid { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .stat { padding: 11px 10px; }
         .stat-value { font-size: 15.5px; }
         .balance-amount { font-size: 34px; }
@@ -953,7 +959,7 @@
         <div class="balance-card">
           <div class="balance-label">Balance acumulado</div>
           <div class="balance-amount" id="balanceAmount">—</div>
-          <div class="balance-sub" id="balanceSub">ahorro total más reciente</div>
+          <div class="balance-sub" id="balanceSub">ahorro acumulado total</div>
         </div>
 
         <div class="panel">
@@ -985,8 +991,20 @@
               <div class="stat-value" id="statExpense">—</div>
             </div>
             <div class="stat savings" id="statSavingsCard">
-              <div class="stat-label">Ahorro</div>
+              <div class="stat-label">Neto</div>
               <div class="stat-value" id="statSavings">—</div>
+            </div>
+            <div class="stat investment">
+              <div class="stat-label">Inv. mes</div>
+              <div class="stat-value" id="statInvestment">—</div>
+            </div>
+            <div class="stat investment">
+              <div class="stat-label">Invertido</div>
+              <div class="stat-value" id="statTotalInvestment">—</div>
+            </div>
+            <div class="stat account">
+              <div class="stat-label">Cuenta</div>
+              <div class="stat-value" id="statAccount">—</div>
             </div>
           </div>
         </div>
@@ -1063,6 +1081,9 @@
         statExpense:           document.getElementById('statExpense'),
         statSavings:           document.getElementById('statSavings'),
         statSavingsCard:       document.getElementById('statSavingsCard'),
+        statInvestment:        document.getElementById('statInvestment'),
+        statTotalInvestment:   document.getElementById('statTotalInvestment'),
+        statAccount:           document.getElementById('statAccount'),
         login:                 document.getElementById('login'),
         loginSpinner:          document.getElementById('loginSpinner'),
         loginForm:             document.getElementById('loginForm'),
@@ -1283,8 +1304,9 @@
           return;
         }
         list.forEach(function(m) {
+          const isInvestment = Boolean(m.isInvestment) || normalizeText(m.category) === 'inversion';
           const row = document.createElement('div');
-          row.className = 'mov ' + (m.type === 'income' ? 'income' : 'expense');
+          row.className = 'mov ' + (m.type === 'income' ? 'income' : isInvestment ? 'investment' : 'expense');
 
           const bar = document.createElement('div');
           bar.className = 'mov-bar';
@@ -1319,7 +1341,7 @@
 
           const amount = document.createElement('div');
           amount.className = 'mov-amount';
-          amount.textContent = (m.type === 'income' ? '+' : '−') + formatEuro(m.amount);
+          amount.textContent = (m.type === 'income' ? '+' : isInvestment ? '↗ ' : '−') + formatEuro(m.amount);
           row.appendChild(amount);
 
           elements.movList.appendChild(row);
@@ -1382,16 +1404,25 @@
           elements.statIncome.textContent = '—';
           elements.statExpense.textContent = '—';
           elements.statSavings.textContent = '—';
+          elements.statInvestment.textContent = '—';
+          elements.statTotalInvestment.textContent = '—';
+          elements.statAccount.textContent = '—';
           elements.donutContainer.innerHTML = '';
           elements.legend.innerHTML = '';
           return;
         }
 
         elements.balanceAmount.textContent = formatEuro(data.balance);
+        elements.balanceSub.textContent = data.latestMonth
+          ? formatMonthLabel(data.latestMonth) + ' · ahorro acumulado total'
+          : 'ahorro acumulado total';
         elements.statIncome.textContent = formatEuro(data.ingresos);
         elements.statExpense.textContent = formatEuro(data.gastos);
         elements.statSavings.textContent = formatEuro(data.ahorroNeto);
         elements.statSavingsCard.classList.toggle('neg', data.ahorroNeto < 0);
+        elements.statInvestment.textContent = formatEuro(data.inversion);
+        elements.statTotalInvestment.textContent = formatEuro(data.totalInversion);
+        elements.statAccount.textContent = formatEuro(data.cuenta);
 
         const segments = [];
         (data.categories || []).forEach(function(c, idx) {
@@ -1568,6 +1599,15 @@
         }
 
         state.dimKey = key || '';
+      }
+
+      function normalizeText(value) {
+        return String(value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim();
       }
 
       function showMonthlyMessage(text, kind) {
